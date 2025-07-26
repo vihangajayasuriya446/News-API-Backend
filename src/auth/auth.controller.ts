@@ -23,12 +23,11 @@ export class AuthController {
   }
 
   @Post('register-admin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  async registerAdmin(
-    @Body() registerDto: RegisterDto,
-    @Query('secretKey') secretKey: string,
-  ): Promise<AuthResponseDto> {
-    return this.authService.registerAdmin(registerDto, secretKey);
-  }
+async registerAdmin(
+  @Body() registerDto: RegisterDto,
+  @Query('secretKey') secretKey: string,
+): Promise<AuthResponseDto> {
+  return this.authService.registerAdmin(registerDto, secretKey);
+}
+
 }

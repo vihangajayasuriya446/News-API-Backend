@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -47,18 +47,26 @@ export class AuthService {
   }
 
   async registerAdmin(registerDto: RegisterDto, secretKey: string): Promise<AuthResponseDto> {
+    // Verify secret key matches
     if (secretKey !== this.configService.get<string>('ADMIN_SECRET_KEY')) {
       throw new UnauthorizedException('Invalid secret key');
     }
 
+    // Check if email already exists
+    const existingUser = await this.usersService.findByEmail(registerDto.email);
+    if (existingUser) {
+      throw new ConflictException('Email already exists');
+    }
+
+    // Create admin user
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-    const user = await this.usersService.create({
+    const adminUser = await this.usersService.create({
       ...registerDto,
       password: hashedPassword,
       role: Role.ADMIN,
     });
 
-    return this.generateToken(user);
+    return this.generateToken(adminUser);
   }
 
   private generateToken(user: Omit<User, 'password' | 'emailToLowerCase'>): AuthResponseDto {
