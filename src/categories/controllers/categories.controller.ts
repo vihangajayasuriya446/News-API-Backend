@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Post, Body, UseGuards, Delete } from '@nestjs/common';
 import { CategoriesService } from '../services/categories.service';
 import { CategoryResponseDto } from '../dto/category-response.dto';
 import { CreateCategoryDto } from '../dto/create-category.dto';
@@ -27,4 +27,11 @@ export class CategoriesController {
   findOne(@Param('id', ParseIntPipe) id: number): Promise<CategoryResponseDto> {
     return this.categoriesService.findOne(id);
   }
+
+    @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN) // Only ADMIN can delete categories
+  async delete(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.categoriesService.delete(id);
+}
 }
