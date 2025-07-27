@@ -47,4 +47,23 @@ export class CategoriesService {
     }
     return category;
   }
+
+  async delete(id: number): Promise<void> {
+    // Check if category exists
+    const category = await this.categoryRepository.findOne({ 
+      where: { id },
+      relations: ['articles'] 
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    // Check if category has articles
+    if (category.articles && category.articles.length > 0) {
+      throw new ConflictException('Cannot delete category with associated articles');
+    }
+
+    await this.categoryRepository.delete(id);
+  }
 }
