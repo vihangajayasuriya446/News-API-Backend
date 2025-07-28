@@ -15,7 +15,14 @@ async function bootstrap() {
   
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Enable CORS configuration
+  app.enableCors({
+    origin: 'http://localhost:3001', // <--- IMPORTANT: Allow your frontend's exact origin
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Allow common HTTP methods
+    credentials: true, // Allow cookies and authorization headers (like your JWT token)
+  });
   
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(3000);
 }
 bootstrap();
