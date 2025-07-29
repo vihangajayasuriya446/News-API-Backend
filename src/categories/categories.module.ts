@@ -1,17 +1,16 @@
-import { Module, forwardRef } from '@nestjs/common';
+// src/categories/categories.module.ts (Example structure - modify based on your actual file)
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CategoriesController } from './controllers/categories.controller';
-import { CategoriesService } from './services/categories.service';
-import { Category } from './entities/category.entity';
-import { ArticlesModule } from '../articles/articles.module';
+import { CategoriesService } from './services/categories.service'; // Assuming this path
+import { Category } from './entities/category.entity'; // Assuming this path
+import { CategoriesController } from './controllers/categories.controller'; // Assuming this path
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Category]),
-    forwardRef(() => ArticlesModule),
+    TypeOrmModule.forFeature([Category]), // Make CategoryRepository available
   ],
-  controllers: [CategoriesController],
-  providers: [CategoriesService],
-  exports: [CategoriesService],
+  controllers: [CategoriesController], // If you have a controller
+  providers: [CategoriesService], // Register the service as a provider
+  exports: [CategoriesService, TypeOrmModule.forFeature([Category])], // Export the service and the TypeOrmModule for other modules to use
 })
 export class CategoriesModule {}

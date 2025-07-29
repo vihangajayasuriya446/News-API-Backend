@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Category } from '../entities/category.entity';
 import { CategoryResponseDto } from '../dto/category-response.dto';
 import { CreateCategoryDto } from '../dto/create-category.dto';
+import { UpdateCategoryDto } from '../dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
@@ -65,5 +66,28 @@ export class CategoriesService {
     }
 
     await this.categoryRepository.delete(id);
+  }
+  
+    async update(id: number, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+    const category = await this.findOne(id); // This will throw NotFoundException if not found
+    
+    // Check if new name conflicts with existing category
+    if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
+      const existing = await this.categoryRepository.findOne({ 
+        where: { name: updateCategoryDto.name } 
+      });
+      
+      if (existing) {
+        throw new ConflictException('Category with this name already exists');
+      }
+    }
+
+    // Update the category
+    const updated = await this.categoryRepository.save({
+      ...category,
+      ...updateCategoryDto
+    });
+
+    return updated;
   }
 }

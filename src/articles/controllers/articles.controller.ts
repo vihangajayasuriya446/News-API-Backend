@@ -153,21 +153,27 @@ export class ArticlesController {
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
     @Query('categories') categories?: string,
-    @Query('published') published: string = 'true',
+    @Query('published') published?: string, // Made optional
   ) {
     const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+    // Only apply published filter if explicitly requested
+    const publishedFilter = published !== undefined ? published === 'true' : undefined;
     return this.articlesService.findAll(
       page,
       limit,
       sortBy,
       categoryIds,
-      published === 'true',
+      publishedFilter,
     );
   }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<ArticleResponseDto> {
-    return this.articlesService.findOne(id, true);
+    // The 'true' parameter indicates to increment view count on retrieval,
+    // which is suitable for public article viewing, but for editing, it's generally false.
+    // For admin edit purposes, it should probably be false unless specifically desired.
+    // Assuming for 'edit' page, we don't want to increment views.
+    return this.articlesService.findOne(id, false); // Changed to false to not increment view on edit page load
   }
 
   @Delete(':id')

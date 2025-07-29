@@ -1,189 +1,212 @@
 // src/articles/services/articles.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Article } from '../entities/article.entity';
 import { CreateArticleDto } from '../dto/create-article.dto';
 import { UpdateArticleDto } from '../dto/update-article.dto';
-import { User } from '../../users/entities/user.entity';
-import { ArticleLike } from '../entities/article-like.entity';
 import { ArticleResponseDto } from '../dto/article-response.dto';
-import { CategoriesService } from '../../categories/services/categories.service';
+import { User } from '../../users/entities/user.entity';
+import { Category } from '../../categories/entities/category.entity';
+import { ArticleLike } from '../entities/article-like.entity';
+import { isBase64 } from 'class-validator';
 
 @Injectable()
 export class ArticlesService {
   constructor(
     @InjectRepository(Article)
-    private readonly articleRepository: Repository<Article>,
+    private articlesRepository: Repository<Article>,
     @InjectRepository(ArticleLike)
-    private readonly likeRepository: Repository<ArticleLike>,
-    private readonly categoriesService: CategoriesService,
+    private articleLikesRepository: Repository<ArticleLike>,
+    @InjectRepository(Category)
+    private categoriesRepository: Repository<Category>,
   ) {}
 
-  async create(createArticleDto: CreateArticleDto, author: User): Promise<ArticleResponseDto> {
-    const category = await this.categoriesService.findOne(createArticleDto.categoryId);
-    
-    const article = new Article();
-    Object.assign(article, {
+  async create(createArticleDto: CreateArticleDto, user: User): Promise<ArticleResponseDto> {
+    const category = await this.categoriesRepository.findOne({ where: { id: createArticleDto.categoryId } });
+    if (!category) {
+      throw new BadRequestException('Category not found.');
+    }
+
+    const newArticle = this.articlesRepository.create({
       ...createArticleDto,
-      author,
-      category,
-      slug: this.generateSlug(createArticleDto.title),
-      // If is_published is true, set current date, otherwise null.
-      // This matches the Article entity's `published_at: Date | null`
-      published_at: createArticleDto.is_published ? new Date() : null 
+      author: user, // Set the author based on the logged-in user
+      category: category,
+      slug: this.generateSlug(createArticleDto.title), // Generate slug from title
+      published_at: createArticleDto.is_published ? new Date() : null, // Set published_at if published
     });
-    
-    const savedArticle = await this.articleRepository.save(article);
-    return this.mapToResponseDto(savedArticle);
+
+    try {
+      const savedArticle = await this.articlesRepository.save(newArticle);
+      return this.mapArticleToResponseDto(savedArticle);
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage.includes('slug')) {
+        throw new BadRequestException('An article with this title (slug) already exists.');
+      }
+      throw error;
+    }
   }
 
   async findAll(
-    page: number = 1,
-    limit: number = 10,
-    sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+    page: number,
+    limit: number,
+    sortBy: 'newest' | 'oldest' | 'views' | 'likes',
     categoryIds?: number[],
-    isPublished: boolean = true,
+    published?: boolean,
   ): Promise<{ articles: ArticleResponseDto[]; count: number }> {
-    const query = this.articleRepository
-      .createQueryBuilder('article')
-      .leftJoinAndSelect('article.author', 'author')
+    const queryBuilder = this.articlesRepository.createQueryBuilder('article')
       .leftJoinAndSelect('article.category', 'category')
-      .where('article.is_published = :isPublished', { isPublished });
+      .leftJoinAndSelect('article.author', 'author');
 
-    if (categoryIds?.length) {
-      query.andWhere('article.category_id IN (:...categoryIds)', { categoryIds });
+    if (categoryIds && categoryIds.length > 0) {
+      queryBuilder.andWhere('category.id IN (:...categoryIds)', { categoryIds });
     }
 
+    if (published !== undefined) {
+      queryBuilder.andWhere('article.is_published = :published', { published });
+    }
+
+    // Apply sorting
     switch (sortBy) {
       case 'newest':
-        query.orderBy('article.published_at', 'DESC');
+        queryBuilder.orderBy('article.created_at', 'DESC');
         break;
       case 'oldest':
-        query.orderBy('article.published_at', 'ASC');
+        queryBuilder.orderBy('article.created_at', 'ASC');
         break;
       case 'views':
-        query.orderBy('article.view_count', 'DESC');
+        queryBuilder.orderBy('article.view_count', 'DESC');
         break;
       case 'likes':
-        query.orderBy('article.like_count', 'DESC');
+        queryBuilder.orderBy('article.like_count', 'DESC');
         break;
+      default:
+        queryBuilder.orderBy('article.created_at', 'DESC');
     }
 
-    const [articles, count] = await query
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    const [articles, count] = await queryBuilder.getManyAndCount();
 
     return {
-      articles: articles.map(article => this.mapToResponseDto(article)),
-      count
+      articles: articles.map(article => this.mapArticleToResponseDto(article)),
+      count,
     };
   }
 
-  async findOne(id: number, incrementViews = false): Promise<ArticleResponseDto> {
-    const article = await this.articleRepository.findOne({
+  async findOne(id: number, incrementView: boolean = false): Promise<ArticleResponseDto> {
+    const article = await this.articlesRepository.findOne({
       where: { id },
-      relations: ['author', 'category'],
+      // Eager loading is set in the Article entity, so relations should be loaded automatically
+      // explicitly adding relations here ensures it if eager loading is ever removed or overridden.
+      relations: ['category', 'author'],
     });
 
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new NotFoundException(`Article with ID ${id} not found.`);
     }
 
-    if (incrementViews) {
-      article.view_count += 1;
-      await this.articleRepository.save(article);
+    if (incrementView) {
+      article.view_count++;
+      await this.articlesRepository.save(article);
     }
 
-    return this.mapToResponseDto(article);
+    return this.mapArticleToResponseDto(article);
   }
 
   async update(id: number, updateArticleDto: UpdateArticleDto): Promise<ArticleResponseDto> {
-    const article = await this.articleRepository.findOne({
-      where: { id },
-      relations: ['category'], // Load category to update it
-    });
-
+    const article = await this.articlesRepository.findOne({ where: { id } });
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new NotFoundException(`Article with ID ${id} not found.`);
     }
 
     if (updateArticleDto.categoryId) {
-      article.category = await this.categoriesService.findOne(updateArticleDto.categoryId);
+      const category = await this.categoriesRepository.findOne({ where: { id: updateArticleDto.categoryId } });
+      if (!category) {
+        throw new BadRequestException('Category not found.');
+      }
+      article.category = category;
     }
 
-    // Apply updates from DTO
-    // Note: Object.assign handles undefined values by not overwriting existing properties
-    // This assumes updateArticleDto fields are 'undefined' if not provided,
-    // which our controller correctly ensures by using `body.prop || undefined`.
-    Object.assign(article, updateArticleDto);
-
-    // Explicitly handle featured_image if it was passed (either new base64 string or null for clearing)
-    // If updateArticleDto.featured_image is undefined, it means no change to image.
+    // Handle featured_image: base64 string or null (for clearing)
     if (updateArticleDto.featured_image !== undefined) {
-      article.featured_image = updateArticleDto.featured_image; 
+      article.featured_image = updateArticleDto.featured_image;
+    } else if (updateArticleDto.clearImage === true) {
+      // If clearImage flag is true, set featured_image to null
+      article.featured_image = null;
     }
 
-    if (updateArticleDto.title) {
+    // Update slug only if title is changed
+    if (updateArticleDto.title && updateArticleDto.title !== article.title) {
       article.slug = this.generateSlug(updateArticleDto.title);
     }
 
-    // Handle is_published updates and published_at date correctly
-    if (updateArticleDto.is_published !== undefined) {
-      article.published_at = updateArticleDto.is_published 
-        ? (article.is_published ? article.published_at : new Date()) // If publishing, set new date if not already published
-        : null; // If unpublishing (is_published is false), set to null
+    // Update published_at timestamp if is_published changes to true
+    if (updateArticleDto.is_published === true && article.is_published === false) {
+      article.published_at = new Date();
+    } else if (updateArticleDto.is_published === false) {
+      article.published_at = null; // Clear published_at if unpublished
     }
 
-    const updatedArticle = await this.articleRepository.save(article);
-    return this.mapToResponseDto(updatedArticle);
+    // Apply other updates
+    Object.assign(article, updateArticleDto);
+
+    try {
+      const updatedArticle = await this.articlesRepository.save(article);
+      return this.mapArticleToResponseDto(updatedArticle);
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage.includes('slug')) {
+        throw new BadRequestException('An article with this title (slug) already exists.');
+      }
+      throw error;
+    }
   }
 
   async delete(id: number): Promise<void> {
-    const result = await this.articleRepository.delete(id);
+    const result = await this.articlesRepository.delete(id);
     if (result.affected === 0) {
-      throw new NotFoundException('Article not found');
+      throw new NotFoundException(`Article with ID ${id} not found.`);
     }
   }
 
-  async toggleLike(articleId: number, userId: number): Promise<{ likes: number, isLiked: boolean }> {
-    const article = await this.articleRepository.findOne({ where: { id: articleId } });
+  async toggleLike(articleId: number, userId: number): Promise<{ likes: number; isLiked: boolean }> {
+    const article = await this.articlesRepository.findOne({ where: { id: articleId } });
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new NotFoundException(`Article with ID ${articleId} not found.`);
     }
 
-    const existingLike = await this.likeRepository.findOne({
-      where: { article_id: articleId, user_id: userId }
+    const existingLike = await this.articleLikesRepository.findOne({
+      where: { article: { id: articleId }, user: { id: userId } },
     });
 
     if (existingLike) {
-      await this.likeRepository.delete({ article_id: articleId, user_id: userId });
-      article.like_count = Math.max(0, article.like_count - 1);
+      // Unlike
+      await this.articleLikesRepository.remove(existingLike);
+      article.like_count--;
+      await this.articlesRepository.save(article);
+      return { likes: article.like_count, isLiked: false };
     } else {
-      await this.likeRepository.save({
-        article_id: articleId,
-        user_id: userId
+      // Like
+      const newLike = this.articleLikesRepository.create({
+        article: { id: articleId },
+        user: { id: userId },
       });
-      article.like_count += 1;
+      await this.articleLikesRepository.save(newLike);
+      article.like_count++;
+      await this.articlesRepository.save(article);
+      return { likes: article.like_count, isLiked: true };
     }
-
-    await this.articleRepository.save(article);
-    return { 
-      likes: article.like_count,
-      isLiked: !existingLike
-    };
   }
 
   private generateSlug(title: string): string {
     return title
       .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/--+/g, '-');
+      .replace(/[^a-z0-9 -]/g, '') // Remove non-alphanumeric characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-'); // Remove duplicate hyphens
   }
 
-  private mapToResponseDto(article: Article): ArticleResponseDto {
+  private mapArticleToResponseDto(article: Article): ArticleResponseDto {
     return {
       id: article.id,
       title: article.title,
@@ -201,11 +224,11 @@ export class ArticlesService {
         lastName: article.author.lastName,
         email: article.author.email
       },
-      featured_image: article.featured_image === null ? undefined : article.featured_image, // Fix: Map null to undefined for ResponseDto
+      featured_image: article.featured_image === null ? undefined : article.featured_image, // Map null to undefined for ResponseDto
       view_count: article.view_count,
       like_count: article.like_count,
       is_published: article.is_published,
-      published_at: article.published_at || undefined, // Fix: published_at can be null, map to undefined for ResponseDto
+      published_at: article.published_at || undefined, // published_at can be null, map to undefined for ResponseDto
       created_at: article.created_at,
       updated_at: article.updated_at
     };
