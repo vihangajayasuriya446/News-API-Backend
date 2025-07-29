@@ -1,3 +1,4 @@
+// src/articles/dto/create-article.dto.ts
 import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateArticleDto {
@@ -19,9 +20,9 @@ export class CreateArticleDto {
 
   @IsOptional()
   @IsBoolean()
-  is_published?: boolean = false;
+  is_published?: boolean = false; // Default value set for consistency
 
   @IsOptional()
   @IsString()
-  featured_image?: string;
+  featured_image?: string; // This will store the base64 string
 }

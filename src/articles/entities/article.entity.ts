@@ -1,3 +1,4 @@
+// src/articles/entities/article.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Category } from '../../categories/entities/category.entity';
@@ -18,8 +19,8 @@ export class Article {
   @Column('text')
   content: string;
 
-  @Column({ nullable: true })
-  excerpt: string;
+  @Column({ nullable: true, type: 'text' }) 
+  excerpt: string | null;
 
   @ManyToOne(() => Category, { eager: true })
   @JoinColumn({ name: 'category_id' })
@@ -30,8 +31,8 @@ export class Article {
   @JoinColumn({ name: 'author_id' })
   author: User;
 
-  @Column({ type: 'varchar', nullable: true })
-  featured_image: string;
+  @Column({ type: 'longtext', nullable: true }) // FIX: Change to 'longtext'
+  featured_image: string | null; 
 
   @Column({ default: 0 })
   @Index()
@@ -45,9 +46,9 @@ export class Article {
   @Index()
   is_published: boolean;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: 'datetime' }) 
   @Index()
-  published_at: Date;
+  published_at: Date | null; 
 
   @CreateDateColumn()
   created_at: Date;
