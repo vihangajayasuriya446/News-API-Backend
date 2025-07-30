@@ -147,25 +147,42 @@ export class ArticlesController {
     return this.articlesService.update(id, updateArticleDto);
   }
 
-  @Get()
-  findAll(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
-    @Query('categories') categories?: string,
-    @Query('published') published?: string, // Made optional
-  ) {
-    const categoryIds = categories ? categories.split(',').map(Number) : undefined;
-    // Only apply published filter if explicitly requested
-    const publishedFilter = published !== undefined ? published === 'true' : undefined;
-    return this.articlesService.findAll(
-      page,
-      limit,
-      sortBy,
-      categoryIds,
-      publishedFilter,
-    );
-  }
+   @Get('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.EDITOR, Role.ADMIN)
+adminFindAll(
+  @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+  @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+  @Query('categories') categories?: string,
+) {
+  const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+  return this.articlesService.findAll(
+    page,
+    limit,
+    sortBy,
+    categoryIds,
+    undefined // No published filter for admin
+  );
+}
+
+    @Get() // Existing endpoint now for public access
+    publicFindAll(
+      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+      @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+      @Query('categories') categories?: string,
+    ) {
+      const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+      // Public can only see published articles
+      return this.articlesService.findAll(
+        page,
+        limit,
+        sortBy,
+        categoryIds,
+        true // Only published articles for public
+      );
+    }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<ArticleResponseDto> {
