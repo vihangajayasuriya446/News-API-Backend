@@ -44,7 +44,7 @@ export class ArticlesController {
   @Roles(Role.EDITOR, Role.ADMIN)
   @UseInterceptors(FileInterceptor('image', {
     storage: diskStorage({
-      destination: './uploads/temp', // Ensure this directory exists and is writable
+      destination: './uploads/temp',
       filename: (req, file, cb) => {
         const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
         return cb(null, `${randomName}${extname(file.originalname)}`);
@@ -61,18 +61,16 @@ export class ArticlesController {
     }
   }))
   async create(
-    @Body() body: any, // Use 'any' to access raw form data as strings
+    @Body() body: any,
     @Req() req: RequestWithUser,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ArticleResponseDto> {
-    // Manually parse values from 'body' (which come as strings from FormData)
     const createArticleDto: CreateArticleDto = {
       title: body.title,
       content: body.content,
-      excerpt: body.excerpt || undefined, // Use undefined if empty string
-      categoryId: parseInt(body.categoryId, 10), // Convert to number
-      is_published: body.is_published === 'true', // Convert string "true"/"false" to boolean
-      // featured_image will be set below if a file is uploaded
+      excerpt: body.excerpt || undefined,
+      categoryId: parseInt(body.categoryId, 10),
+      is_published: body.is_published === 'true',
     };
 
     if (file) {
@@ -80,7 +78,7 @@ export class ArticlesController {
         const imageBuffer = fs.readFileSync(file.path);
         const base64Image = imageBuffer.toString('base64');
         createArticleDto.featured_image = `data:${file.mimetype};base64,${base64Image}`;
-        fs.unlinkSync(file.path); // Clean up temp file
+        fs.unlinkSync(file.path);
       } catch (error) {
         throw new BadRequestException('Error processing image: ' + error.message);
       }
@@ -94,7 +92,7 @@ export class ArticlesController {
   @Roles(Role.EDITOR, Role.ADMIN)
   @UseInterceptors(FileInterceptor('image', {
     storage: diskStorage({
-      destination: './uploads/temp', // Ensure this directory exists and is writable
+      destination: './uploads/temp',
       filename: (req, file, cb) => {
         const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
         return cb(null, `${randomName}${extname(file.originalname)}`);
@@ -112,17 +110,15 @@ export class ArticlesController {
   }))
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: any, // Use 'any' to access raw form data as strings
+    @Body() body: any,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ArticleResponseDto> {
-    // Manually parse values for UpdateArticleDto
     const updateArticleDto: UpdateArticleDto = {
       title: body.title || undefined,
       content: body.content || undefined,
       excerpt: body.excerpt || undefined,
       categoryId: body.categoryId ? parseInt(body.categoryId, 10) : undefined,
       is_published: body.is_published !== undefined ? (body.is_published === 'true') : undefined,
-      // featured_image will be handled below based on file or clearImage flag
     };
 
     if (file) {
@@ -130,68 +126,74 @@ export class ArticlesController {
         const imageBuffer = fs.readFileSync(file.path);
         const base64Image = imageBuffer.toString('base64');
         updateArticleDto.featured_image = `data:${file.mimetype};base64,${base64Image}`;
-        fs.unlinkSync(file.path); // Clean up temp file
+        fs.unlinkSync(file.path);
       } catch (error) {
         throw new BadRequestException('Error processing image: ' + error.message);
       }
     } else if (body.clearImage === 'true') {
-        // Frontend sent 'clearImage=true', so set featured_image to null to remove it
-        updateArticleDto.featured_image = null;
-    } else {
-        // If no new file and no clearImage flag, don't touch featured_image in DTO
-        // This means the service will keep the existing image
-        updateArticleDto.featured_image = undefined; // Ensure it's not set to anything if no change
+      updateArticleDto.featured_image = null;
     }
-
 
     return this.articlesService.update(id, updateArticleDto);
   }
 
-   @Get('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.EDITOR, Role.ADMIN)
-adminFindAll(
-  @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-  @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
-  @Query('categories') categories?: string,
-) {
-  const categoryIds = categories ? categories.split(',').map(Number) : undefined;
-  return this.articlesService.findAll(
-    page,
-    limit,
-    sortBy,
-    categoryIds,
-    undefined // No published filter for admin
-  );
-}
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.EDITOR, Role.ADMIN)
+  adminFindAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+    @Query('categories') categories?: string,
+    @Query('search') search?: string
+  ) {
+    const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+    return this.articlesService.findAll(
+      page,
+      limit,
+      sortBy,
+      categoryIds,
+      undefined,
+      search
+    );
+  }
 
-    @Get() // Existing endpoint now for public access
-    publicFindAll(
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-      @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
-      @Query('categories') categories?: string,
-    ) {
-      const categoryIds = categories ? categories.split(',').map(Number) : undefined;
-      // Public can only see published articles
-      return this.articlesService.findAll(
-        page,
-        limit,
-        sortBy,
-        categoryIds,
-        true // Only published articles for public
-      );
-    }
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.EDITOR, Role.ADMIN, Role.USER)
+  publicFindAll(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+    @Query('categories') categories?: string,
+    @Query('search') search?: string
+  ) {
+    const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+    return this.articlesService.findAll(
+      page,
+      limit,
+      sortBy,
+      categoryIds,
+      true,
+      search
+    );
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<ArticleResponseDto> {
-    // The 'true' parameter indicates to increment view count on retrieval,
-    // which is suitable for public article viewing, but for editing, it's generally false.
-    // For admin edit purposes, it should probably be false unless specifically desired.
-    // Assuming for 'edit' page, we don't want to increment views.
-    return this.articlesService.findOne(id, false); // Changed to false to not increment view on edit page load
+    return this.articlesService.findOne(id, false);
   }
+
+  @Post(':id/view')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+   @Roles(Role.EDITOR, Role.ADMIN, Role.USER)
+  async incrementViewCount(
+    @Param('id', ParseIntPipe) id: number
+  ): Promise<{ view_count: number }> {
+    const article = await this.articlesService.incrementViewCount(id);
+    return { view_count: article.view_count };
+  }
+
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -208,4 +210,16 @@ adminFindAll(
   ) {
     return this.articlesService.toggleLike(id, req.user.id);
   }
+
+  @Get(':id/like-status')
+  @UseGuards(JwtAuthGuard)
+  async getLikeStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    const like = await this.articlesService.getLikeStatus(id, req.user.id);
+    return { isLiked: !!like };
+  }
+
+  
 }

@@ -9,7 +9,6 @@ import { ArticleResponseDto } from '../dto/article-response.dto';
 import { User } from '../../users/entities/user.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { ArticleLike } from '../entities/article-like.entity';
-import { isBase64 } from 'class-validator';
 
 @Injectable()
 export class ArticlesService {
@@ -30,10 +29,10 @@ export class ArticlesService {
 
     const newArticle = this.articlesRepository.create({
       ...createArticleDto,
-      author: user, // Set the author based on the logged-in user
+      author: user,
       category: category,
-      slug: this.generateSlug(createArticleDto.title), // Generate slug from title
-      published_at: createArticleDto.is_published ? new Date() : null, // Set published_at if published
+      slug: this.generateSlug(createArticleDto.title),
+      published_at: createArticleDto.is_published ? new Date() : null,
     });
 
     try {
@@ -53,10 +52,18 @@ export class ArticlesService {
     sortBy: 'newest' | 'oldest' | 'views' | 'likes',
     categoryIds?: number[],
     published?: boolean,
+    search?: string
   ): Promise<{ articles: ArticleResponseDto[]; count: number }> {
     const queryBuilder = this.articlesRepository.createQueryBuilder('article')
       .leftJoinAndSelect('article.category', 'category')
       .leftJoinAndSelect('article.author', 'author');
+
+    if (search) {
+      queryBuilder.where(
+        '(article.title LIKE :search OR article.content LIKE :search OR article.excerpt LIKE :search OR category.name LIKE :search OR author.firstName LIKE :search OR author.lastName LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
 
     if (categoryIds && categoryIds.length > 0) {
       queryBuilder.andWhere('category.id IN (:...categoryIds)', { categoryIds });
@@ -66,7 +73,6 @@ export class ArticlesService {
       queryBuilder.andWhere('article.is_published = :published', { published });
     }
 
-    // Apply sorting
     switch (sortBy) {
       case 'newest':
         queryBuilder.orderBy('article.created_at', 'DESC');
@@ -97,8 +103,6 @@ export class ArticlesService {
   async findOne(id: number, incrementView: boolean = false): Promise<ArticleResponseDto> {
     const article = await this.articlesRepository.findOne({
       where: { id },
-      // Eager loading is set in the Article entity, so relations should be loaded automatically
-      // explicitly adding relations here ensures it if eager loading is ever removed or overridden.
       relations: ['category', 'author'],
     });
 
@@ -128,27 +132,22 @@ export class ArticlesService {
       article.category = category;
     }
 
-    // Handle featured_image: base64 string or null (for clearing)
     if (updateArticleDto.featured_image !== undefined) {
       article.featured_image = updateArticleDto.featured_image;
     } else if (updateArticleDto.clearImage === true) {
-      // If clearImage flag is true, set featured_image to null
       article.featured_image = null;
     }
 
-    // Update slug only if title is changed
     if (updateArticleDto.title && updateArticleDto.title !== article.title) {
       article.slug = this.generateSlug(updateArticleDto.title);
     }
 
-    // Update published_at timestamp if is_published changes to true
     if (updateArticleDto.is_published === true && article.is_published === false) {
       article.published_at = new Date();
     } else if (updateArticleDto.is_published === false) {
-      article.published_at = null; // Clear published_at if unpublished
+      article.published_at = null;
     }
 
-    // Apply other updates
     Object.assign(article, updateArticleDto);
 
     try {
@@ -180,13 +179,11 @@ export class ArticlesService {
     });
 
     if (existingLike) {
-      // Unlike
       await this.articleLikesRepository.remove(existingLike);
       article.like_count--;
       await this.articlesRepository.save(article);
       return { likes: article.like_count, isLiked: false };
     } else {
-      // Like
       const newLike = this.articleLikesRepository.create({
         article: { id: articleId },
         user: { id: userId },
@@ -201,9 +198,9 @@ export class ArticlesService {
   private generateSlug(title: string): string {
     return title
       .toLowerCase()
-      .replace(/[^a-z0-9 -]/g, '') // Remove non-alphanumeric characters
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-'); // Remove duplicate hyphens
+      .replace(/[^a-z0-9 -]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
   }
 
   private mapArticleToResponseDto(article: Article): ArticleResponseDto {
@@ -224,13 +221,30 @@ export class ArticlesService {
         lastName: article.author.lastName,
         email: article.author.email
       },
-      featured_image: article.featured_image === null ? undefined : article.featured_image, // Map null to undefined for ResponseDto
+      featured_image: article.featured_image === null ? undefined : article.featured_image,
       view_count: article.view_count,
       like_count: article.like_count,
       is_published: article.is_published,
-      published_at: article.published_at || undefined, // published_at can be null, map to undefined for ResponseDto
+      published_at: article.published_at || undefined,
       created_at: article.created_at,
       updated_at: article.updated_at
     };
   }
+
+
+async getLikeStatus(articleId: number, userId: number): Promise<boolean> {
+  const like = await this.articleLikesRepository.findOne({
+    where: { article: { id: articleId }, user: { id: userId } },
+  });
+  return !!like;
+}
+
+async incrementViewCount(id: number): Promise<Article> {
+  await this.articlesRepository.increment({ id }, 'view_count', 1);
+  const article = await this.articlesRepository.findOne({ where: { id } });
+  if (!article) {
+    throw new NotFoundException(`Article with ID ${id} not found.`);
+  }
+  return article;
+}
 }

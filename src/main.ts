@@ -19,7 +19,7 @@ async function bootstrap() {
   // Enable CORS configuration
   app.enableCors({
     origin: 'http://localhost:3001', // <--- IMPORTANT: Allow your frontend's exact origin
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Allow common HTTP methods
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE, OPTIONS', // Allow common HTTP methods
     credentials: true, // Allow cookies and authorization headers (like your JWT token)
   });
   
