@@ -137,26 +137,26 @@ export class ArticlesController {
     return this.articlesService.update(id, updateArticleDto);
   }
 
-  @Get('admin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.EDITOR, Role.ADMIN)
-  adminFindAll(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
-    @Query('categories') categories?: string,
-    @Query('search') search?: string
-  ) {
-    const categoryIds = categories ? categories.split(',').map(Number) : undefined;
-    return this.articlesService.findAll(
-      page,
-      limit,
-      sortBy,
-      categoryIds,
-      undefined,
-      search
-    );
-  }
+ @Get('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.EDITOR, Role.ADMIN)
+adminFindAll(
+  @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+  @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  @Query('sort') sortBy: 'newest' | 'oldest' | 'views' | 'likes' = 'newest',
+  @Query('categories') categories?: string,
+  @Query('search') search?: string
+) {
+  const categoryIds = categories ? categories.split(',').map(Number) : undefined;
+  return this.articlesService.findAll(
+    page,
+    limit,
+    sortBy,
+    categoryIds,
+    undefined, // Explicitly pass undefined to ignore published status
+    search
+  );
+}
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -58,6 +58,11 @@ export class ArticlesService {
       .leftJoinAndSelect('article.category', 'category')
       .leftJoinAndSelect('article.author', 'author');
 
+    // Only apply published filter if explicitly requested
+    if (published !== undefined) {
+      queryBuilder.andWhere('article.is_published = :published', { published });
+    }
+
     if (search) {
       queryBuilder.where(
         '(article.title LIKE :search OR article.content LIKE :search OR article.excerpt LIKE :search OR category.name LIKE :search OR author.firstName LIKE :search OR author.lastName LIKE :search)',
@@ -67,10 +72,6 @@ export class ArticlesService {
 
     if (categoryIds && categoryIds.length > 0) {
       queryBuilder.andWhere('category.id IN (:...categoryIds)', { categoryIds });
-    }
-
-    if (published !== undefined) {
-      queryBuilder.andWhere('article.is_published = :published', { published });
     }
 
     switch (sortBy) {
