@@ -119,18 +119,18 @@ npm run test
 ```
 ---
 
-📌 Notes
+##📌 Notes
 CORS is enabled for http://localhost:3001 (frontend origin)
 Image handling uses multer with diskStorage and deletes file after base64 encoding
 ValidationPipe and ExceptionFilter configured globally in main.ts
 
 ---
 
-👨‍💻 Author
+## 👨‍💻 Author
 Vihanga Jayasuriya 
 
 ---
-📄 License
+## 📄 License
 This project is licensed under the MIT License.
 © 2025 Vihanga Jayasuriya. All Rights Reserved.
 
