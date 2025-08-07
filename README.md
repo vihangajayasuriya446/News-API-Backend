@@ -130,8 +130,9 @@ ValidationPipe and ExceptionFilter configured globally in main.ts
 Vihanga Jayasuriya 
 
 ---
-🪪 License
-MIT License 
+📄 License
+This project is licensed under the MIT License.
+© 2025 Vihanga Jayasuriya. All Rights Reserved.
 
 ---
 
