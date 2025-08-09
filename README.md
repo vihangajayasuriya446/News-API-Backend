@@ -80,7 +80,7 @@ The app uses two guards:
 - `JwtAuthGuard`: Verifies JWT token
 - `RolesGuard`: Verifies user role (ADMIN, EDITOR, USER)
 
-You can set roles via the `@Roles(...)` decorator.
+Set roles via the `@Roles(...)` decorator.
 
 ---
 
