@@ -21,6 +21,13 @@ A role-based RESTful API built with **NestJS**, designed for a news management p
 
 ---
 
+
+## 📽️ Demo Video
+
+https://github.com/user-attachments/assets/58511fa8-6592-466e-92db-0154739abdb6
+
+ ---
+
 ## 🚀 Tech Stack
 
 - [NestJS](https://nestjs.com/)
