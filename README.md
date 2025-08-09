@@ -126,7 +126,7 @@ npm run test
 ```
 ---
 
-##📌 Notes
+## 📌 Notes
 - CORS is enabled for http://localhost:3001 (frontend origin)
 - Image handling uses multer with diskStorage and deletes file after base64 encoding
 - ValidationPipe and ExceptionFilter configured globally in main.ts
