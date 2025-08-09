@@ -96,6 +96,34 @@ Set roles via the `@Roles(...)` decorator.
 
 ---
 
+
+## 🗝️ Environment Variables
+
+```bash
+Create a .env file in the project root with the following variables:
+
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_USERNAME=root
+DB_PASSWORD=YOUR_DB_PASSWORD
+DB_NAME=derana_news
+
+# JWT Authentication
+JWT_SECRET=YOUR_JWT_SECRET
+JWT_EXPIRES_IN=72h
+
+# Admin Security
+ADMIN_SECRET_KEY=YOUR_ADMIN_KEY
+
+# Application
+NODE_ENV=development
+APP_PORT=3000
+
+```
+
+---
+
 ## ✅ Running the App
 
 ```bash
@@ -109,8 +137,8 @@ cp .env.example .env  # then edit the .env
 npm run start:dev
 
 ```
----
 
+---
 ## 🌐 App URL
 
 http://localhost:3000
